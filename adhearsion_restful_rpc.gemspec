@@ -22,6 +22,8 @@ Gem::Specification.new do |s|
 
   s.add_runtime_dependency %q<adhearsion>, ["~> 2.1"]
   s.add_runtime_dependency %q<activesupport>, [">= 3.0.10"]
+  s.add_runtime_dependency %q<rack>, [">= 0.0.0"]
+  s.add_runtime_dependency %q<json>, [">= 0.0.0"]
 
   s.add_development_dependency %q<bundler>, ["~> 1.0"]
   s.add_development_dependency %q<rspec>, ["~> 2.5"]
