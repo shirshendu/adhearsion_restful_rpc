@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
   s.email       = ["shirshendu.mukherjee.88@gmail.com"]
   s.homepage    = ""
   s.summary     = %q{Adhearsion Restful RPC working with adhearsion 2.0}
-  s.description = %q{TODO: Write a gem description}
+  s.description = %q{Working on this independently, no affiliation with Adhearsion formally (yet), but all my respects to them and their code.}
 
   s.rubyforge_project = "adhearsion_restful_rpc"
 
