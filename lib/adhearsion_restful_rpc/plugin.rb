@@ -19,7 +19,7 @@ module AdhearsionRestfulRpc
       port "5000", :desc => "Port to run the webserver on"
       handler "WEBrick", :desc => "Can be any valid Rack::Handler constant name. Other options: WEBrick, EventedMongrel. If you don't know the differences between these, 'Mongrel' is definitely a good choice."
       show_exceptions true, :desc => "In a production system, you should make this 'false' since it could expose code structure and vulnerabilities."
-      authentication "false", :desc => "Authentication to the API. Add config.authentication[<username>] = 'password' to add each user"
+      authentication false, :desc => "Authentication to the API. Add config.authentication[<username>] = 'password' to add each user"
       if authentication 
         authentication.each do |user, password|
           user "#{password}", :desc => "Auth"
