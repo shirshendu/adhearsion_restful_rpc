@@ -2,21 +2,8 @@ module AdhearsionRestfulRpc
   class Plugin < Adhearsion::Plugin
 
     # Regex for IP address
-#    VALID_IP_ADDRESS = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|\*)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|\*)$/
+    VALID_IP_ADDRESS = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|\*)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|\*)$/
     
-    # Actions to perform when the plugin is loaded
-    #
-#    init :adhearsion_restful_rpc do
-#      begin
-#        require 'rack'
-#        require 'json'
-#        require 'drb'
-#      rescue LoadError
-#        abort "ERROR: restful_rpc requires the 'rack' and 'json' gems"
-#      end
-#      logger.warn "AdhearsionRestfulRpc has been loaded"
-#    end
-
     # Basic configuration for the plugin
     #
     config :adhearsion_restful_rpc do
@@ -28,28 +15,64 @@ module AdhearsionRestfulRpc
       desc "Type of access"
       access {
         everyone false, :desc => "True value will ignore whitelist and blacklist data, and allow access to everyone"
-        whitelist ["127.0.0.1","61.16.182.2","192.168.173.186"], :desc => "Array of whitelisted IPs"
+        whitelist ["127.0.0.1","61.16.182.2","192.168.173.186"], :desc => "Array of whitelisted IPs - Takes precedence if both white and black lists are supplied."
         blacklist ["21.21.12.12"], :desc => "Array of blacklisted IPs"
       }
     end
 
+    class << self
+      def ip_allowed?(ip)
+        raise ArgumentError, "#{ip.inspect} is not a valid IP address!" unless ip.kind_of?(String) && ip =~ VALID_IP_ADDRESS
+
+        octets = ip.split "."
+
+        access = Adhearsion.config.adhearsion_restful_rpc.access
+        if access.everyone
+          true
+        elsif access.whitelist
+          whitelist = access.whitelist
+          !! whitelist.find do |pattern|
+            pattern_octets = pattern.split "."
+            # Traverse both arrays in parallel
+            octets.zip(pattern_octets).map do |octet, octet_pattern|
+              octet_pattern == "*" ? true : (octet == octet_pattern)
+            end == [true, true, true, true]
+          end
+        elsif access.blacklist
+          blacklist = access.blacklist
+          ! blacklist.find do |pattern|
+            pattern_octets = pattern.split "."
+            # Traverse both arrays in parallel
+            octets.zip(pattern_octets).map do |octet, octet_pattern|
+              octet_pattern == "*" ? true : (octet == octet_pattern)
+            end == [true, true, true, true]
+          end
+        else
+          raise Adhearsion::Components::ConfigurationError, 'Unrecognized "access" configuration value!'
+        end
+      end
+    end
+
     RESTFUL_API_HANDLER = lambda do |env|
+      unless ip_allowed? env["REMOTE_ADDR"]
+        return [403, {"Content-Type" => "application/json"}, [{:error => "Forbidden by access control configuration"}.to_json]]
+      end
       json = env["rack.input"].read
 
       # Return "Bad Request" HTTP error if the client forgot
-      return [400, {}, [{:error => "You must POST a valid JSON object!"}.to_json]] if json.blank?
+      return [400, {"Content-Type" => "application/json"}, [{:error => "You must POST a valid JSON object!"}.to_json]] if json.blank?
 
-#      json = JSON.parse json
+      #      json = JSON.parse json
 
       nesting = Adhearsion.config.adhearsion_restful_rpc.path_nesting 
       path = env["PATH_INFO"]
 
-      return [404, {}, [{:error => "This resource does not respond to #{path.inspect}"}.to_json]] unless path[0...nesting.size] == nesting
+      return [404, {"Content-Type" => "application/json"}, [{:error => "This resource does not respond to #{path.inspect}"}.to_json]] unless path[0...nesting.size] == nesting
 
       path = path[nesting.size..-1]
 
       resources = path.split("/")
-#      fr = Adhearsion
+      #      fr = Adhearsion
       namespaces = ["Adhearsion"]
       methods = []
       final_resource = ""
@@ -70,25 +93,9 @@ module AdhearsionRestfulRpc
         end
       end
 
-#      return [403, {"Content-Type" => "application/json"}, [{"error" => "You cannot nest method names"}.to_json]] if path.include?("/")
-
-
-#      A = DRbObject.new_with_uri "druby://127.0.0.1:5666"
-        #Adhearsion::Components.component_manager.extend_object_with(Object.new, :rpc)
-
       # TODO: set the content-type and other HTTP headers
-      #response_object = rpc_object.send(path, *json)
-      #if defined? response_object.headers
-      #  return [200, {"Content-Type" => "application/json"}, Array(response_object.headers.to_json)]
-      #end
-
-      #[200, {"Content-Type" => "application/json"}, Array(response_object.to_json)]
-#      methods.each do |method|
-#      end
       response = eval [namespaces.join("::"),*methods].join(".") + json
-#      response = eval final_resource
-      #[200, {"Content-Type" => "application/json"}, [[namespaces.join("::"),*methods].join(".").to_json]]
-      [200, {"Content-Type" => "application/json"}, [response.to_json]]
+      [200, {"Content-Type" => "application/json"}, [response.inspect.to_json]]
     end
 
     init do
@@ -105,18 +112,18 @@ module AdhearsionRestfulRpc
       authentication  = config["authentication"]
       show_exceptions = config["show_exceptions"]
       handler         = Rack::Handler.const_get(config["handler"] || "Mongrel")
-    
+
       if authentication
         api = Rack::Auth::Basic.new(api) do |username, password|
           authentication[username] == password
         end
         api.realm = "Adhearsion API"
       end
-    
+
       if show_exceptions
         api = Rack::ShowStatus.new(Rack::ShowExceptions.new(api))
       end
-    
+
       Thread.new do
         handler.run api, :Port => port
       end
